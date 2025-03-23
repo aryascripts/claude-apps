@@ -1,5 +1,8 @@
 name: Notice Tracker
 
+permissions:
+  contents: write
+
 on:
   schedule:
     # Runs at 9:00 AM UTC every day
