@@ -19,6 +19,7 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version-file: ./follower/.nvmrc
+          cache-dependency-path: "./follower/package-lock.json"
           cache: "npm"
 
       - name: Cache node_modules
