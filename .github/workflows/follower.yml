@@ -38,8 +38,8 @@ jobs:
         if: steps.node-modules-cache.outputs.cache-hit != 'true'
         run: npm ci
 
-      - name: Run IRCC follower script
-        run: node ircc-follower/index.js
+      - name: Run follower script
+        run: node follower/index.js
 
       - name: Configure Git
         run: |
@@ -54,6 +54,6 @@ jobs:
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Update IRCC notices for ${today}"
+            git commit -m "Update notices for ${today}"
             git push
           fi
