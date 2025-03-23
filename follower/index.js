@@ -15,6 +15,20 @@ function formatRFC822Date(date) {
   return date.toUTCString();
 }
 
+// Function to parse date from the format commonly used on the page
+function parseDate(dateStr) {
+  // Try to parse the date string
+  const date = new Date(dateStr);
+
+  // Check if date is valid
+  if (isNaN(date.getTime())) {
+    // Return current date as fallback if parsing fails
+    return new Date();
+  }
+
+  return date;
+}
+
 // Function to generate a unique GUID for each item
 function generateGuid(title, link) {
   return Buffer.from(`${title}-${link}`).toString("base64");
@@ -63,6 +77,11 @@ async function generateRSSFeed() {
       const title = linkElement.text().trim();
       const relativeLink = linkElement.attr("href");
 
+      // Extract date from the <span> tag within the <li>
+      const dateElement = item.find("span");
+      const dateText = dateElement.text().trim();
+      const pubDate = parseDate(dateText);
+
       // Resolve relative URLs to absolute URLs
       const link = new URL(relativeLink, "https://www.canada.ca").href;
 
@@ -71,8 +90,8 @@ async function generateRSSFeed() {
     <title><![CDATA[${title}]]></title>
     <link>${link}</link>
     <guid isPermaLink="false">${generateGuid(title, link)}</guid>
-    <pubDate>${formatRFC822Date(currentDate)}</pubDate>
-    <description><![CDATA[${title} - Click to read the full notice.]]></description>
+    <pubDate>${formatRFC822Date(pubDate)}</pubDate>
+    <description><![CDATA[${title} - Published on ${dateText}]]></description>
   </item>
 `;
     }
@@ -83,7 +102,10 @@ async function generateRSSFeed() {
 
     // Generate filename with current date
     const formattedDate = currentDate.toISOString().split("T")[0];
-    const outputFile = path.join(__dirname, `canada-immigration-feed.xml`);
+    const outputFile = path.join(
+      __dirname,
+      `canada-immigration-feed-${formattedDate}.xml`
+    );
     fs.writeFileSync(outputFile, rssContent);
 
     console.log(`RSS feed generated successfully: ${outputFile}`);
