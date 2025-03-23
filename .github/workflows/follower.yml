@@ -10,9 +10,6 @@ on:
 jobs:
   fetch-and-update:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./follower
 
     steps:
       - name: Checkout repository
@@ -21,7 +18,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version-file: .nvmrc
+          node-version-file: ./follower/.nvmrc
           cache: "npm"
 
       - name: Cache node_modules
@@ -32,6 +29,8 @@ jobs:
           key: ${{ runner.os }}-node-modules-${{ hashFiles('**/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-node-modules-
+
+      - run: cd ./follower
 
       - name: Install dependencies
         if: steps.node-modules-cache.outputs.cache-hit != 'true'
