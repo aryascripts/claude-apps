@@ -1,4 +1,4 @@
-name: IRCC Notice Tracker
+name: Notice Tracker
 
 on:
   schedule:
