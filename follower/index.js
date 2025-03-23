@@ -83,10 +83,7 @@ async function generateRSSFeed() {
 
     // Generate filename with current date
     const formattedDate = currentDate.toISOString().split("T")[0];
-    const outputFile = path.join(
-      __dirname,
-      `canada-immigration-feed-${formattedDate}.xml`
-    );
+    const outputFile = path.join(__dirname, `canada-immigration-feed.xml`);
     fs.writeFileSync(outputFile, rssContent);
 
     console.log(`RSS feed generated successfully: ${outputFile}`);
