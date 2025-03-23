@@ -31,14 +31,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node-modules-
 
-      - run: cd ./follower
-
       - name: Install dependencies
         if: steps.node-modules-cache.outputs.cache-hit != 'true'
         run: npm ci
+        working-directory: ./follower
 
       - name: Run script
         run: node index.js
+        working-directory: ./follower
 
       - name: Configure Git
         run: |
