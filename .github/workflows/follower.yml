@@ -1,9 +1,5 @@
 name: Notice Tracker
 
-defaults:
-  run:
-    working-directory: ./follower
-
 on:
   schedule:
     # Runs at 9:00 AM UTC every day
@@ -14,6 +10,9 @@ on:
 jobs:
   fetch-and-update:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./follower
 
     steps:
       - name: Checkout repository
