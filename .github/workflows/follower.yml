@@ -1,5 +1,9 @@
 name: Notice Tracker
 
+defaults:
+  run:
+    working-directory: ./follower
+
 on:
   schedule:
     # Runs at 9:00 AM UTC every day
@@ -38,8 +42,8 @@ jobs:
         if: steps.node-modules-cache.outputs.cache-hit != 'true'
         run: npm ci
 
-      - name: Run follower script
-        run: node follower/index.js
+      - name: Run script
+        run: node index.js
 
       - name: Configure Git
         run: |
