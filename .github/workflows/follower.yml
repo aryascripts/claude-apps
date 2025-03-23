@@ -10,13 +10,12 @@ on:
 jobs:
   fetch-and-update:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./follower
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+
+      - run: cd ./follower
 
       - name: Read Node.js version from .nvmrc
         id: nvmrc
