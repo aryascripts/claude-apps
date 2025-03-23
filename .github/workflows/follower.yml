@@ -1,5 +1,8 @@
 name: Notice Tracker
 
+permissions:
+  contents: write
+
 on:
   schedule:
     # Runs at 9:00 AM UTC every day
@@ -19,6 +22,7 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version-file: ./follower/.nvmrc
+          cache-dependency-path: "./follower/package-lock.json"
           cache: "npm"
 
       - name: Cache node_modules
@@ -30,14 +34,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node-modules-
 
-      - run: cd ./follower
-
       - name: Install dependencies
         if: steps.node-modules-cache.outputs.cache-hit != 'true'
         run: npm ci
+        working-directory: ./follower
 
       - name: Run script
         run: node index.js
+        working-directory: ./follower
 
       - name: Configure Git
         run: |
