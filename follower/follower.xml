@@ -5,8 +5,15 @@
   <link>https://www.canada.ca/en/immigration-refugees-citizenship/news/notices.html</link>
   <description></description>
   <language>en-ca</language>
-  <lastBuildDate>Thu, 12 Jun 2025 09:25:53 GMT</lastBuildDate>
+  <lastBuildDate>Fri, 13 Jun 2025 09:25:54 GMT</lastBuildDate>
   <atom:link href="https://example.com/follower.xml" rel="self" type="application/rss+xml" />
+  <item>
+    <title><![CDATA[Notice – Canada extends pilot to support skilled refugees and employers]]></title>
+    <link>https://www.canada.ca/en/immigration-refugees-citizenship/news/notices/canada-extends-pilot-support-skilled-refugees-employers.html</link>
+    <guid isPermaLink="false">Tm90aWNlIOKAkyBDYW5hZGEgZXh0ZW5kcyBwaWxvdCB0byBzdXBwb3J0IHNraWxsZWQgcmVmdWdlZXMgYW5kIGVtcGxveWVycy1odHRwczovL3d3dy5jYW5hZGEuY2EvZW4vaW1taWdyYXRpb24tcmVmdWdlZXMtY2l0aXplbnNoaXAvbmV3cy9ub3RpY2VzL2NhbmFkYS1leHRlbmRzLXBpbG90LXN1cHBvcnQtc2tpbGxlZC1yZWZ1Z2Vlcy1lbXBsb3llcnMuaHRtbA==</guid>
+    <pubDate>Thu, 12 Jun 2025 00:00:00 GMT</pubDate>
+    <description><![CDATA[Notice – Canada extends pilot to support skilled refugees and employers - Published on June 12, 2025]]></description>
+  </item>
   <item>
     <title><![CDATA[Notice – Update on 2025 Parents and Grandparents Program]]></title>
     <link>https://www.canada.ca/en/immigration-refugees-citizenship/news/notices/update-2025-parents-grandparents-program.html</link>
@@ -69,13 +76,6 @@
     <guid isPermaLink="false">Tm90aWNlIOKAkyBDaGFuZ2VzIHRvIG9wZW4gd29yayBwZXJtaXRzIGZvciBmYW1pbHkgbWVtYmVycyBvZiB0ZW1wb3JhcnkgcmVzaWRlbnRzLWh0dHBzOi8vd3d3LmNhbmFkYS5jYS9lbi9pbW1pZ3JhdGlvbi1yZWZ1Z2Vlcy1jaXRpemVuc2hpcC9uZXdzL25vdGljZXMvY2hhbmdlcy1vcGVuLXdvcmstcGVybWl0cy1mYW1pbHktbWVtYmVycy10ZW1wb3JhcnktcmVzaWRlbnRzLmh0bWw=</guid>
     <pubDate>Tue, 14 Jan 2025 00:00:00 GMT</pubDate>
     <description><![CDATA[Notice – Changes to open work permits for family members of temporary residents - Published on January 14, 2025]]></description>
-  </item>
-  <item>
-    <title><![CDATA[Notice – 2025 Agri-Food Pilot application cap]]></title>
-    <link>https://www.canada.ca/en/immigration-refugees-citizenship/news/notices/2025-agri-food-pilot-application-cap.html</link>
-    <guid isPermaLink="false">Tm90aWNlIOKAkyAyMDI1IEFncmktRm9vZCBQaWxvdCBhcHBsaWNhdGlvbiBjYXAtaHR0cHM6Ly93d3cuY2FuYWRhLmNhL2VuL2ltbWlncmF0aW9uLXJlZnVnZWVzLWNpdGl6ZW5zaGlwL25ld3Mvbm90aWNlcy8yMDI1LWFncmktZm9vZC1waWxvdC1hcHBsaWNhdGlvbi1jYXAuaHRtbA==</guid>
-    <pubDate>Fri, 03 Jan 2025 00:00:00 GMT</pubDate>
-    <description><![CDATA[Notice – 2025 Agri-Food Pilot application cap - Published on January 3, 2025]]></description>
   </item>
 </channel>
 </rss>
