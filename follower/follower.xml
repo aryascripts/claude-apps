@@ -5,8 +5,15 @@
   <link>https://www.canada.ca/en/immigration-refugees-citizenship/news/notices.html</link>
   <description></description>
   <language>en-ca</language>
-  <lastBuildDate>Tue, 17 Jun 2025 09:26:50 GMT</lastBuildDate>
+  <lastBuildDate>Wed, 18 Jun 2025 09:26:51 GMT</lastBuildDate>
   <atom:link href="https://example.com/follower.xml" rel="self" type="application/rss+xml" />
+  <item>
+    <title><![CDATA[Notice – Additional information about the Strong Borders Act]]></title>
+    <link>https://www.canada.ca/en/immigration-refugees-citizenship/news/notices/additional-information-strong-borders-act.html</link>
+    <guid isPermaLink="false">Tm90aWNlIOKAkyBBZGRpdGlvbmFsIGluZm9ybWF0aW9uIGFib3V0IHRoZSBTdHJvbmcgQm9yZGVycyBBY3QtaHR0cHM6Ly93d3cuY2FuYWRhLmNhL2VuL2ltbWlncmF0aW9uLXJlZnVnZWVzLWNpdGl6ZW5zaGlwL25ld3Mvbm90aWNlcy9hZGRpdGlvbmFsLWluZm9ybWF0aW9uLXN0cm9uZy1ib3JkZXJzLWFjdC5odG1s</guid>
+    <pubDate>Tue, 17 Jun 2025 00:00:00 GMT</pubDate>
+    <description><![CDATA[Notice – Additional information about the Strong Borders Act - Published on June 17, 2025]]></description>
+  </item>
   <item>
     <title><![CDATA[Notice – Canada extends pilot to support skilled refugees and employers]]></title>
     <link>https://www.canada.ca/en/immigration-refugees-citizenship/news/notices/canada-extends-pilot-support-skilled-refugees-employers.html</link>
@@ -69,13 +76,6 @@
     <guid isPermaLink="false">Tm90aWNlIOKAkyBQcm9wb3NlZCBuZXcgcGVuYWx0aWVzIGZvciBwYWlkIGltbWlncmF0aW9uIHJlcHJlc2VudGF0aXZlcyB3aG8gYnJlYWsgdGhlIGxhdy1odHRwczovL3d3dy5jYW5hZGEuY2EvZW4vaW1taWdyYXRpb24tcmVmdWdlZXMtY2l0aXplbnNoaXAvbmV3cy9ub3RpY2VzL3Byb3Bvc2VkLXBlbmFsdGllcy1mb3ItcGFpZC1pbW1pZ3JhdGlvbi1yZXByZXNlbnRhdGl2ZXMtYnJlYWstdGhlLWxhdy5odG1s</guid>
     <pubDate>Fri, 17 Jan 2025 00:00:00 GMT</pubDate>
     <description><![CDATA[Notice – Proposed new penalties for paid immigration representatives who break the law - Published on January 17, 2025]]></description>
-  </item>
-  <item>
-    <title><![CDATA[Notice – Changes to open work permits for family members of temporary residents]]></title>
-    <link>https://www.canada.ca/en/immigration-refugees-citizenship/news/notices/changes-open-work-permits-family-members-temporary-residents.html</link>
-    <guid isPermaLink="false">Tm90aWNlIOKAkyBDaGFuZ2VzIHRvIG9wZW4gd29yayBwZXJtaXRzIGZvciBmYW1pbHkgbWVtYmVycyBvZiB0ZW1wb3JhcnkgcmVzaWRlbnRzLWh0dHBzOi8vd3d3LmNhbmFkYS5jYS9lbi9pbW1pZ3JhdGlvbi1yZWZ1Z2Vlcy1jaXRpemVuc2hpcC9uZXdzL25vdGljZXMvY2hhbmdlcy1vcGVuLXdvcmstcGVybWl0cy1mYW1pbHktbWVtYmVycy10ZW1wb3JhcnktcmVzaWRlbnRzLmh0bWw=</guid>
-    <pubDate>Tue, 14 Jan 2025 00:00:00 GMT</pubDate>
-    <description><![CDATA[Notice – Changes to open work permits for family members of temporary residents - Published on January 14, 2025]]></description>
   </item>
 </channel>
 </rss>
