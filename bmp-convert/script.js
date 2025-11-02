@@ -149,6 +149,19 @@ function handleFile(file) {
     return;
   }
 
+  // Validate filename (prevent path traversal attempts)
+  if (
+    file.name.includes("..") ||
+    file.name.includes("/") ||
+    file.name.includes("\\")
+  ) {
+    showNotification(
+      "Invalid filename. Please use a valid image file.",
+      "error"
+    );
+    return;
+  }
+
   // Store filename
   currentFileName = file.name;
 
@@ -158,6 +171,26 @@ function handleFile(file) {
     const img = new Image();
 
     img.onload = () => {
+      // Security: Validate image dimensions to prevent memory exhaustion
+      const MAX_DIMENSION = 10000; // Reasonable limit
+      if (img.width > MAX_DIMENSION || img.height > MAX_DIMENSION) {
+        showNotification(
+          `Image dimensions too large. Maximum is ${MAX_DIMENSION}px on any side.`,
+          "error"
+        );
+        return;
+      }
+
+      // Security: Check total pixel count to prevent memory exhaustion
+      const MAX_PIXELS = 250000000; // ~250MP (reasonable limit for processing)
+      if (img.width * img.height > MAX_PIXELS) {
+        showNotification(
+          "Image is too large. Please resize before converting.",
+          "error"
+        );
+        return;
+      }
+
       currentImage = img;
       preview.src = e.target.result;
       previewSection.classList.add("visible");
@@ -223,6 +256,36 @@ function convertToBMP() {
       targetHeight = parseInt(customHeight.value) || currentImage.height;
     }
     // If original, keep current dimensions
+
+    // Security: Validate target dimensions before setting canvas
+    const MAX_DIMENSION = 10000;
+    const MAX_PIXELS = 250000000;
+    if (
+      targetWidth > MAX_DIMENSION ||
+      targetHeight > MAX_DIMENSION ||
+      targetWidth * targetHeight > MAX_PIXELS
+    ) {
+      showNotification(
+        "Target dimensions are too large. Please use smaller dimensions.",
+        "error"
+      );
+      convertBtn.disabled = false;
+      return;
+    }
+
+    if (
+      targetWidth <= 0 ||
+      targetHeight <= 0 ||
+      !Number.isInteger(targetWidth) ||
+      !Number.isInteger(targetHeight)
+    ) {
+      showNotification(
+        "Invalid dimensions. Please enter positive integers.",
+        "error"
+      );
+      convertBtn.disabled = false;
+      return;
+    }
 
     // Set canvas dimensions
     canvas.width = targetWidth;
@@ -761,16 +824,25 @@ function downloadBMP(blob) {
   const a = document.createElement("a");
   a.href = url;
   // Use original filename if available, otherwise default name
-  const baseName = currentFileName
-    ? currentFileName.replace(/\.[^/.]+$/, "")
-    : "converted";
+  // Security: Sanitize filename to prevent path traversal
+  let baseName = "converted";
+  if (currentFileName) {
+    baseName = currentFileName.replace(/\.[^/.]+$/, "");
+    // Remove any dangerous characters
+    baseName = baseName.replace(/[^a-zA-Z0-9_-]/g, "_");
+    // Limit length
+    baseName = baseName.substring(0, 100);
+  }
   a.download = `${baseName}.bmp`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
 
-  // Clean up
-  setTimeout(() => URL.revokeObjectURL(url), 100);
+  // Security: Clean up object URL immediately after download starts
+  // Using requestAnimationFrame for better cleanup timing
+  requestAnimationFrame(() => {
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
 
   // Show file size
   const sizeMB = (blob.size / (1024 * 1024)).toFixed(2);
