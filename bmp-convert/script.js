@@ -24,6 +24,13 @@ let currentImage = null;
 let currentFileName = null;
 let notificationTimeout = null;
 
+// Security: Escape HTML to prevent XSS
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
+
 // Initialize
 init();
 
@@ -155,17 +162,17 @@ function handleFile(file) {
       preview.src = e.target.result;
       previewSection.classList.add("visible");
 
-      // Display image info with filename
+      // Display image info with filename (safely escaped)
       const fileSizeKB = (file.size / 1024).toFixed(2);
       imageInfo.innerHTML = `
-            <div><strong>File:</strong> ${file.name}</div>
+            <div><strong>File:</strong> ${escapeHtml(file.name)}</div>
             <div><strong>Dimensions:</strong> ${img.width} × ${
         img.height
       }px</div>
             <div><strong>Size:</strong> ${fileSizeKB} KB</div>
-            <div><strong>Format:</strong> ${file.type
-              .split("/")[1]
-              .toUpperCase()}</div>
+            <div><strong>Format:</strong> ${escapeHtml(
+              file.type.split("/")[1].toUpperCase()
+            )}</div>
         `;
 
       showNotification("Image loaded successfully!", "success");
