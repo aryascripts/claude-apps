@@ -17,6 +17,7 @@ const cropCustom = document.getElementById("cropCustom");
 const customCropInputs = document.getElementById("customCropInputs");
 const customWidth = document.getElementById("customWidth");
 const customHeight = document.getElementById("customHeight");
+const enableCompression = document.getElementById("enableCompression");
 
 // State
 let currentImage = null;
@@ -226,7 +227,13 @@ function convertToBMP() {
 
     // Use manual BMP encoder (browsers don't natively support image/bmp format)
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const bmpBlob = encodeBMP(imageData);
+
+    // Choose encoding based on compression setting
+    const bmpBlob =
+      enableCompression && enableCompression.checked
+        ? encodeBMP8Bit(imageData)
+        : encodeBMP(imageData);
+
     downloadBMP(bmpBlob);
     convertBtn.disabled = false;
   } catch (error) {
@@ -283,6 +290,208 @@ function encodeBMP(imageData) {
       // Alpha channel is ignored in 24-bit BMP
     }
     // Add row padding (each row must be multiple of 4 bytes)
+    for (let p = 0; p < padding; p++) {
+      view.setUint8(offset++, 0);
+    }
+  }
+
+  return new Blob([buffer], { type: "image/bmp" });
+}
+
+function encodeBMP8Bit(imageData) {
+  const width = imageData.width;
+  const height = imageData.height;
+  const data = imageData.data;
+
+  // Use octree quantization for better color quality
+  // Simplified approach: quantize to 6-7-6 levels (252 colors) for good quality
+  const quantizeR = (r) => Math.floor((r * 6) / 256);
+  const quantizeG = (g) => Math.floor((g * 7) / 256);
+  const quantizeB = (b) => Math.floor((b * 6) / 256);
+
+  // Build palette using quantization
+  const paletteMap = new Map();
+  const colorArray = [];
+
+  // Create a 6x7x6 color cube (252 colors) - good quality, fast lookup
+  for (let rq = 0; rq < 6; rq++) {
+    for (let gq = 0; gq < 7; gq++) {
+      for (let bq = 0; bq < 6; bq++) {
+        const r = Math.round((rq * 255) / 5);
+        const g = Math.round((gq * 255) / 6);
+        const b = Math.round((bq * 255) / 5);
+        const colorKey = (rq << 16) | (gq << 8) | bq;
+        const index = colorArray.length;
+        paletteMap.set(colorKey, index);
+        colorArray.push({ r, g, b });
+      }
+    }
+  }
+
+  // Fill remaining slots (up to 256) with average colors from the image
+  if (colorArray.length < 256) {
+    const colorCount = new Map();
+
+    // Sample colors from the image
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 3] < 128) continue; // Skip transparent/semi-transparent
+
+      const rq = quantizeR(data[i]);
+      const gq = quantizeG(data[i + 1]);
+      const bq = quantizeB(data[i + 2]);
+      const colorKey = (rq << 16) | (gq << 8) | bq;
+
+      if (!paletteMap.has(colorKey)) {
+        colorCount.set(colorKey, (colorCount.get(colorKey) || 0) + 1);
+      }
+    }
+
+    // Add most frequent colors to palette
+    const sortedColors = Array.from(colorCount.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 256 - colorArray.length);
+
+    for (const [colorKey] of sortedColors) {
+      const rq = (colorKey >> 16) & 0xff;
+      const gq = (colorKey >> 8) & 0xff;
+      const bq = colorKey & 0xff;
+      const r = Math.round((rq * 255) / 5);
+      const g = Math.round((gq * 255) / 6);
+      const b = Math.round((bq * 255) / 5);
+      paletteMap.set(colorKey, colorArray.length);
+      colorArray.push({ r, g, b });
+    }
+  }
+
+  // Fill remaining slots with black
+  while (colorArray.length < 256) {
+    colorArray.push({ r: 0, g: 0, b: 0 });
+  }
+
+  // Optimized color matching function
+  const findClosestColor = (r, g, b) => {
+    const rq = quantizeR(r);
+    const gq = quantizeG(g);
+    const bq = quantizeB(b);
+    const colorKey = (rq << 16) | (gq << 8) | bq;
+
+    if (paletteMap.has(colorKey)) {
+      return paletteMap.get(colorKey);
+    }
+
+    // Find nearest color using Euclidean distance (optimized)
+    let minDist = Infinity;
+    let bestIndex = 0;
+
+    // Check nearby quantized colors first for speed
+    const searchRange = 1;
+    for (let dr = -searchRange; dr <= searchRange; dr++) {
+      for (let dg = -searchRange; dg <= searchRange; dg++) {
+        for (let db = -searchRange; db <= searchRange; db++) {
+          const nr = Math.max(0, Math.min(5, rq + dr));
+          const ng = Math.max(0, Math.min(6, gq + dg));
+          const nb = Math.max(0, Math.min(5, bq + db));
+          const nKey = (nr << 16) | (ng << 8) | nb;
+
+          if (paletteMap.has(nKey)) {
+            const idx = paletteMap.get(nKey);
+            const pr = colorArray[idx].r;
+            const pg = colorArray[idx].g;
+            const pb = colorArray[idx].b;
+            const dist = (r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2;
+
+            if (dist < minDist) {
+              minDist = dist;
+              bestIndex = idx;
+            }
+          }
+        }
+      }
+    }
+
+    // If not found in nearby colors, search all palette (fallback)
+    if (minDist === Infinity) {
+      for (let i = 0; i < colorArray.length; i++) {
+        const pr = colorArray[i].r;
+        const pg = colorArray[i].g;
+        const pb = colorArray[i].b;
+        const dist = (r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2;
+
+        if (dist < minDist) {
+          minDist = dist;
+          bestIndex = i;
+        }
+      }
+    }
+
+    return bestIndex;
+  };
+
+  // Create pixel index array
+  const pixelIndices = new Uint8Array(width * height);
+
+  // Assign pixel indices
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      if (data[i + 3] < 128) {
+        pixelIndices[y * width + x] = 0; // Transparent -> use first palette entry
+      } else {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        pixelIndices[y * width + x] = findClosestColor(r, g, b);
+      }
+    }
+  }
+
+  // Calculate sizes
+  const paletteSize = 256 * 4; // 256 colors * 4 bytes each (BGR + reserved)
+  const rowSize = Math.floor((8 * width + 31) / 32) * 4; // 8-bit, padded to 4 bytes
+  const pixelArraySize = rowSize * height;
+  const fileSize = 54 + paletteSize + pixelArraySize; // Header + palette + pixels
+
+  // Create buffer
+  const buffer = new ArrayBuffer(fileSize);
+  const view = new DataView(buffer);
+
+  // BMP File Header (14 bytes)
+  view.setUint8(0, 0x42); // 'B'
+  view.setUint8(1, 0x4d); // 'M'
+  view.setUint32(2, fileSize, true); // File size
+  view.setUint32(6, 0, true); // Reserved
+  view.setUint32(10, 54 + paletteSize, true); // Pixel data offset (after header + palette)
+
+  // DIB Header - BITMAPINFOHEADER (40 bytes)
+  view.setUint32(14, 40, true); // DIB header size
+  view.setInt32(18, width, true); // Width
+  view.setInt32(22, -height, true); // Height (negative = top-down)
+  view.setUint16(26, 1, true); // Planes
+  view.setUint16(28, 8, true); // Bits per pixel (8-bit)
+  view.setUint32(30, 0, true); // Compression (0 = BI_RGB)
+  view.setUint32(34, pixelArraySize, true); // Image size
+  view.setInt32(38, 2835, true); // X pixels per meter
+  view.setInt32(42, 2835, true); // Y pixels per meter
+  view.setUint32(46, 256, true); // Colors in palette
+  view.setUint32(50, 256, true); // Important colors
+
+  // Color palette (256 entries, BGR format + reserved byte)
+  let offset = 54;
+  for (let i = 0; i < 256; i++) {
+    const color = colorArray[i] || { r: 0, g: 0, b: 0 };
+    view.setUint8(offset++, color.b); // Blue
+    view.setUint8(offset++, color.g); // Green
+    view.setUint8(offset++, color.r); // Red
+    view.setUint8(offset++, 0); // Reserved
+  }
+
+  // Pixel data (8-bit indices with row padding)
+  const padding = rowSize - width;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      view.setUint8(offset++, pixelIndices[y * width + x]);
+    }
+    // Add row padding
     for (let p = 0; p < padding; p++) {
       view.setUint8(offset++, 0);
     }

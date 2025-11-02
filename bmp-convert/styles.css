@@ -349,6 +349,36 @@ body {
   font-size: 0.875rem;
 }
 
+.compression-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+  background: var(–gray-50);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  user-select: none;
+}
+
+.compression-option:hover {
+  background: var(–gray-100);
+}
+
+.compression-option input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(–primary);
+}
+
+.compression-option span {
+  font-size: 0.875rem;
+  color: var(–gray-700);
+  font-weight: 500;
+  flex: 1;
+}
+
 /* Card layout in preview section */
 .preview-section .card:first-child {
   flex: 1;
