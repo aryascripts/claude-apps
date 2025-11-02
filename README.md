@@ -1,4 +1,4 @@
-# claude-apps
+# page-apps
 
 https://aryascripts.github.io/page-apps/
 
