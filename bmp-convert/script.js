@@ -17,7 +17,7 @@ const cropCustom = document.getElementById("cropCustom");
 const customCropInputs = document.getElementById("customCropInputs");
 const customWidth = document.getElementById("customWidth");
 const customHeight = document.getElementById("customHeight");
-const enableCompression = document.getElementById("enableCompression");
+const compressionLevel = document.getElementById("compressionLevel");
 
 // State
 let currentImage = null;
@@ -228,11 +228,19 @@ function convertToBMP() {
     // Use manual BMP encoder (browsers don't natively support image/bmp format)
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-    // Choose encoding based on compression setting
-    const bmpBlob =
-      enableCompression && enableCompression.checked
-        ? encodeBMP8Bit(imageData)
-        : encodeBMP(imageData);
+    // Choose encoding based on compression level
+    let bmpBlob;
+    const level = compressionLevel ? compressionLevel.value : "8";
+
+    if (level === "24") {
+      bmpBlob = encodeBMP(imageData);
+    } else if (level === "8") {
+      bmpBlob = encodeBMP8Bit(imageData);
+    } else if (level === "4" || level === "4-aggressive") {
+      bmpBlob = encodeBMP4Bit(imageData, level === "4-aggressive");
+    } else {
+      bmpBlob = encodeBMP8Bit(imageData);
+    }
 
     downloadBMP(bmpBlob);
     convertBtn.disabled = false;
@@ -490,6 +498,247 @@ function encodeBMP8Bit(imageData) {
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       view.setUint8(offset++, pixelIndices[y * width + x]);
+    }
+    // Add row padding
+    for (let p = 0; p < padding; p++) {
+      view.setUint8(offset++, 0);
+    }
+  }
+
+  return new Blob([buffer], { type: "image/bmp" });
+}
+
+function encodeBMP4Bit(imageData, aggressive = false) {
+  const width = imageData.width;
+  const height = imageData.height;
+  const data = imageData.data;
+
+  // Apply Floyd-Steinberg dithering if aggressive mode
+  if (aggressive) {
+    const ditheredData = new Uint8ClampedArray(data);
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4;
+        if (ditheredData[i + 3] < 128) continue; // Skip transparent pixels
+
+        const oldR = ditheredData[i];
+        const oldG = ditheredData[i + 1];
+        const oldB = ditheredData[i + 2];
+
+        // Quantize to 4 levels per channel (4^3 = 64 colors max, but we'll use 16)
+        const quantize = (val) => Math.round((val / 255) * 3) * 85;
+        const newR = Math.max(0, Math.min(255, quantize(oldR)));
+        const newG = Math.max(0, Math.min(255, quantize(oldG)));
+        const newB = Math.max(0, Math.min(255, quantize(oldB)));
+
+        ditheredData[i] = newR;
+        ditheredData[i + 1] = newG;
+        ditheredData[i + 2] = newB;
+
+        // Calculate error
+        const errR = oldR - newR;
+        const errG = oldG - newG;
+        const errB = oldB - newB;
+
+        // Distribute error to neighboring pixels (Floyd-Steinberg)
+        const distributeError = (x1, y1, weight) => {
+          if (x1 >= 0 && x1 < width && y1 >= 0 && y1 < height) {
+            const idx = (y1 * width + x1) * 4;
+            if (ditheredData[idx + 3] >= 128) {
+              ditheredData[idx] = Math.max(
+                0,
+                Math.min(255, ditheredData[idx] + errR * weight)
+              );
+              ditheredData[idx + 1] = Math.max(
+                0,
+                Math.min(255, ditheredData[idx + 1] + errG * weight)
+              );
+              ditheredData[idx + 2] = Math.max(
+                0,
+                Math.min(255, ditheredData[idx + 2] + errB * weight)
+              );
+            }
+          }
+        };
+
+        distributeError(x + 1, y, 7 / 16); // Right
+        distributeError(x - 1, y + 1, 3 / 16); // Bottom-left
+        distributeError(x, y + 1, 5 / 16); // Bottom
+        distributeError(x + 1, y + 1, 1 / 16); // Bottom-right
+      }
+    }
+
+    // Use dithered data
+    const tempCanvas = document.createElement("canvas");
+    tempCanvas.width = width;
+    tempCanvas.height = height;
+    const tempCtx = tempCanvas.getContext("2d");
+    const tempImageData = tempCtx.createImageData(width, height);
+    tempImageData.data.set(ditheredData);
+    tempCtx.putImageData(tempImageData, 0, 0);
+    const finalImageData = tempCtx.getImageData(0, 0, width, height);
+    return encodeBMP4BitFromData(finalImageData);
+  } else {
+    return encodeBMP4BitFromData(imageData);
+  }
+}
+
+function encodeBMP4BitFromData(imageData) {
+  const width = imageData.width;
+  const height = imageData.height;
+  const data = imageData.data;
+
+  // Build 16-color palette using median cut or quantization
+  // Use 4 levels per RGB channel = 4^3 = 64 possible colors, but we'll pick the best 16
+  const quantizeR = (r) => Math.floor((r * 4) / 256);
+  const quantizeG = (g) => Math.floor((g * 4) / 256);
+  const quantizeB = (b) => Math.floor((b * 4) / 256);
+
+  // Count color frequencies
+  const colorCount = new Map();
+
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] < 128) continue; // Skip transparent
+
+    const rq = quantizeR(data[i]);
+    const gq = quantizeG(data[i + 1]);
+    const bq = quantizeB(data[i + 2]);
+    const colorKey = (rq << 8) | (gq << 4) | bq;
+
+    colorCount.set(colorKey, (colorCount.get(colorKey) || 0) + 1);
+  }
+
+  // Select top 16 most frequent colors
+  const sortedColors = Array.from(colorCount.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 16);
+
+  const colorArray = [];
+  const paletteMap = new Map();
+
+  // Build palette from most frequent colors
+  sortedColors.forEach(([colorKey]) => {
+    const rq = (colorKey >> 8) & 0xf;
+    const gq = (colorKey >> 4) & 0xf;
+    const bq = colorKey & 0xf;
+    const r = Math.round((rq * 255) / 3);
+    const g = Math.round((gq * 255) / 3);
+    const b = Math.round((bq * 255) / 3);
+
+    paletteMap.set(colorKey, colorArray.length);
+    colorArray.push({ r, g, b });
+  });
+
+  // Fill remaining slots if needed (shouldn't happen, but safety)
+  while (colorArray.length < 16) {
+    const idx = colorArray.length;
+    const rq = idx % 4;
+    const gq = Math.floor(idx / 4) % 4;
+    const bq = Math.floor(idx / 16) % 4;
+    const r = Math.round((rq * 255) / 3);
+    const g = Math.round((gq * 255) / 3);
+    const b = Math.round((bq * 255) / 3);
+    colorArray.push({ r, g, b });
+  }
+
+  // Find closest color function
+  const findClosestColor = (r, g, b) => {
+    const rq = quantizeR(r);
+    const gq = quantizeG(g);
+    const bq = quantizeB(b);
+    const colorKey = (rq << 8) | (gq << 4) | bq;
+
+    if (paletteMap.has(colorKey)) {
+      return paletteMap.get(colorKey);
+    }
+
+    // Find nearest color using Euclidean distance
+    let minDist = Infinity;
+    let bestIndex = 0;
+
+    for (let i = 0; i < colorArray.length; i++) {
+      const pr = colorArray[i].r;
+      const pg = colorArray[i].g;
+      const pb = colorArray[i].b;
+      const dist = (r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2;
+
+      if (dist < minDist) {
+        minDist = dist;
+        bestIndex = i;
+      }
+    }
+
+    return bestIndex;
+  };
+
+  // Create pixel index array
+  const pixelIndices = new Uint8Array(width * height);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      if (data[i + 3] < 128) {
+        pixelIndices[y * width + x] = 0;
+      } else {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        pixelIndices[y * width + x] = findClosestColor(r, g, b);
+      }
+    }
+  }
+
+  // Calculate sizes for 4-bit BMP
+  const paletteSize = 16 * 4; // 16 colors * 4 bytes each
+  const rowSize = Math.floor((4 * width + 31) / 32) * 4; // 4-bit, padded to 4 bytes
+  const pixelArraySize = rowSize * height;
+  const fileSize = 54 + paletteSize + pixelArraySize;
+
+  // Create buffer
+  const buffer = new ArrayBuffer(fileSize);
+  const view = new DataView(buffer);
+
+  // BMP File Header
+  view.setUint8(0, 0x42); // 'B'
+  view.setUint8(1, 0x4d); // 'M'
+  view.setUint32(2, fileSize, true);
+  view.setUint32(6, 0, true);
+  view.setUint32(10, 54 + paletteSize, true);
+
+  // DIB Header
+  view.setUint32(14, 40, true);
+  view.setInt32(18, width, true);
+  view.setInt32(22, -height, true);
+  view.setUint16(26, 1, true);
+  view.setUint16(28, 4, true); // 4 bits per pixel
+  view.setUint32(30, 0, true);
+  view.setUint32(34, pixelArraySize, true);
+  view.setInt32(38, 2835, true);
+  view.setInt32(42, 2835, true);
+  view.setUint32(46, 16, true); // Colors in palette
+  view.setUint32(50, 16, true);
+
+  // Color palette (16 entries)
+  let offset = 54;
+  for (let i = 0; i < 16; i++) {
+    const color = colorArray[i] || { r: 0, g: 0, b: 0 };
+    view.setUint8(offset++, color.b);
+    view.setUint8(offset++, color.g);
+    view.setUint8(offset++, color.r);
+    view.setUint8(offset++, 0); // Reserved
+  }
+
+  // Pixel data (4-bit packed: 2 pixels per byte)
+  const padding = rowSize - Math.ceil(width / 2);
+  for (let y = 0; y < height; y++) {
+    let byteOffset = 0;
+    for (let x = 0; x < width; x += 2) {
+      const idx1 = pixelIndices[y * width + x];
+      const idx2 = x + 1 < width ? pixelIndices[y * width + x + 1] : 0;
+      const packed = (idx1 << 4) | idx2;
+      view.setUint8(offset++, packed);
+      byteOffset++;
     }
     // Add row padding
     for (let p = 0; p < padding; p++) {

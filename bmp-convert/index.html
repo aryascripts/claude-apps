@@ -167,11 +167,15 @@
             <h3 class="card-heading">Ready to Convert</h3>
             <p>Your image will be converted to BMP format</p>
             <label class="compression-option">
-              <input type="checkbox" id="enableCompression" checked />
-              <span
-                >Use 8-bit compression (smaller file, minimal quality
-                loss)</span
-              >
+              <span>Compression Level:</span>
+              <select id="compressionLevel">
+                <option value="24">24-bit (No compression) - ~1.1 MB</option>
+                <option value="8">8-bit (Standard) - ~376 KB</option>
+                <option value="4">4-bit (High compression) - ~188 KB</option>
+                <option value="4-aggressive" selected>
+                  4-bit Aggressive - ~150 KB
+                </option>
+              </select>
             </label>
             <button class="btn-convert" id="convertBtn">
               <svg
