@@ -49,7 +49,7 @@ function createSVGIcon(svgString) {
 const tools = [
   {
     name: "Tap Counter",
-    path: "/counter",
+    path: "/page-apps/counter",
     description: "A simple tap counter with dark mode support",
     icon: `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <path d="M9 11l3 3L22 4" stroke-linecap="round" stroke-linejoin="round"/>
@@ -58,7 +58,7 @@ const tools = [
   },
   {
     name: "Image to BMP Converter",
-    path: "/bmp-convert",
+    path: "/page-apps/bmp-convert",
     description:
       "Convert PNG/JPEG images to BMP format locally in your browser",
     icon: `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
