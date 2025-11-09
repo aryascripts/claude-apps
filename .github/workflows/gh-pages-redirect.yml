@@ -13,109 +13,23 @@ permissions:
 jobs:
   generate-redirects:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-      
+          node-version: "20"
+
       - name: Generate redirect HTML files
         run: |
           mkdir -p docs
-          
-          # Create redirect HTML template function
-          cat > generate-redirect.js << 'EOF'
-          const fs = require('fs');
-          const path = require('path');
-          
-          const netlifyBase = 'https://aryascripts.netlify.app';
-          
-          function createRedirectHtml(targetPath) {
-            return `<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Redirecting...</title>
-    <script>
-      // Get current path and remove repository base path if present
-      let currentPath = window.location.pathname;
-      // Remove /page-apps prefix if it exists (for project pages)
-      if (currentPath.startsWith('/page-apps')) {
-        currentPath = currentPath.replace('/page-apps', '');
-      }
-      // Ensure path starts with /
-      if (!currentPath.startsWith('/')) {
-        currentPath = '/' + currentPath;
-      }
-      // Remove trailing slash for consistency (except root)
-      if (currentPath !== '/' && currentPath.endsWith('/')) {
-        currentPath = currentPath.slice(0, -1);
-      }
-      const netlifyBase = "${netlifyBase}";
-      const redirectUrl = netlifyBase + currentPath;
-      window.location.replace(redirectUrl);
-    </script>
-    <meta http-equiv="refresh" content="0; url=${netlifyBase}${targetPath}" />
-    <link rel="canonical" href="${netlifyBase}${targetPath}" />
-    <style>
-      body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 100vh;
-        margin: 0;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        text-align: center;
-        padding: 2rem;
-      }
-      .container {
-        max-width: 500px;
-      }
-      a {
-        color: white;
-        text-decoration: underline;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <h1>Redirecting...</h1>
-      <p>You are being redirected to the Web Tools Collection.</p>
-      <p><a href="${netlifyBase}${targetPath}">Click here if you are not redirected automatically</a>.</p>
-    </div>
-  </body>
-</html>`;
-          }
-          
-          // Create root redirect
-          fs.writeFileSync('docs/index.html', createRedirectHtml('/'));
-          
-          // Create redirects for each tool
-          const tools = ['/counter', '/bmp-convert'];
-          
-          tools.forEach(toolPath => {
-            const dirPath = `docs${toolPath}`;
-            fs.mkdirSync(dirPath, { recursive: true });
-            fs.writeFileSync(`${dirPath}/index.html`, createRedirectHtml(toolPath));
-          });
-          
-          // Create .nojekyll file
-          fs.writeFileSync('docs/.nojekyll', '# Prevent Jekyll processing\n');
-          
-          console.log('Redirect files generated successfully!');
-          EOF
-          
-          node generate-redirect.js
-      
+          node scripts/generate-gh-pages-redirects.js
+
       - name: Commit and push redirect files
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
@@ -123,4 +37,3 @@ jobs:
           git add docs/
           git diff --staged --quiet || git commit -m "Auto-generate GitHub Pages redirects"
           git push
-
