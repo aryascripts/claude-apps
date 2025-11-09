@@ -1,6 +1,6 @@
 // Unit tests for BMP encoder functions
 import { describe, it, expect, beforeEach } from "vitest";
-import { encodeBMP, encodeBMP8Bit, encodeBMP4Bit } from "./encoder.js";
+import { encodeBMP, encodeBMP8Bit, encodeBMP4Bit } from "../encoder.js";
 
 // Helper function to create test ImageData
 function createTestImageData(width, height, pixelGenerator) {
@@ -455,5 +455,111 @@ describe("Edge cases", () => {
     const blob = encodeBMP8Bit(imageData);
 
     expect(blob.size).toBeGreaterThan(0);
+  });
+
+  it("should handle 8-bit encoding with single unique color", async () => {
+    // This tests the edge case where medianCutQuantize might have empty arrays
+    const imageData = createTestImageData(10, 10, () => ({
+      r: 128,
+      g: 128,
+      b: 128,
+      a: 255,
+    }));
+
+    // Should not throw error about undefined property access
+    const blob = encodeBMP8Bit(imageData);
+
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.size).toBeGreaterThan(0);
+    const header = await readBMPHeader(blob);
+    expect(header.bitsPerPixel).toBe(8);
+  });
+
+  it("should handle 8-bit encoding with very few unique colors", async () => {
+    // Test with only 2 unique colors - this can trigger edge cases in median cut
+    const imageData = createTestImageData(20, 20, (x, y) => ({
+      r: (x + y) % 2 === 0 ? 255 : 0,
+      g: (x + y) % 2 === 0 ? 0 : 255,
+      b: 0,
+      a: 255,
+    }));
+
+    const blob = encodeBMP8Bit(imageData);
+
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.size).toBeGreaterThan(0);
+    const header = await readBMPHeader(blob);
+    expect(header.bitsPerPixel).toBe(8);
+    expect(header.colorsInPalette).toBe(256);
+  });
+
+  it("should handle 4-bit encoding with single unique color", async () => {
+    const imageData = createTestImageData(10, 10, () => ({
+      r: 200,
+      g: 200,
+      b: 200,
+      a: 255,
+    }));
+
+    const blob = encodeBMP4Bit(imageData, false);
+
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.size).toBeGreaterThan(0);
+    const header = await readBMPHeader(blob);
+    expect(header.bitsPerPixel).toBe(4);
+  });
+
+  it("should handle 8-bit encoding after 4-bit encoding (switching compression levels)", async () => {
+    // This tests the specific bug where switching from 4-bit to 8-bit would fail
+    const imageData = createTestImageData(15, 15, (x, y) => ({
+      r: (x * 17) % 256,
+      g: (y * 17) % 256,
+      b: ((x + y) * 13) % 256,
+      a: 255,
+    }));
+
+    // First encode as 4-bit
+    const blob4Bit = encodeBMP4Bit(imageData, false);
+    expect(blob4Bit.size).toBeGreaterThan(0);
+
+    // Then encode as 8-bit - this should not throw an error
+    const blob8Bit = encodeBMP8Bit(imageData);
+    expect(blob8Bit.size).toBeGreaterThan(0);
+
+    const header8Bit = await readBMPHeader(blob8Bit);
+    expect(header8Bit.bitsPerPixel).toBe(8);
+  });
+
+  it("should handle images with all transparent pixels", async () => {
+    const imageData = createTestImageData(5, 5, () => ({
+      r: 255,
+      g: 255,
+      b: 255,
+      a: 0, // All transparent
+    }));
+
+    // Should handle gracefully
+    const blob8Bit = encodeBMP8Bit(imageData);
+    expect(blob8Bit.size).toBeGreaterThan(0);
+
+    const blob4Bit = encodeBMP4Bit(imageData, false);
+    expect(blob4Bit.size).toBeGreaterThan(0);
+  });
+
+  it("should handle 8-bit encoding with gradient (many similar colors)", async () => {
+    // Gradient images can trigger edge cases in median cut algorithm
+    const imageData = createTestImageData(50, 50, (x, y) => ({
+      r: Math.floor((x / 50) * 255),
+      g: Math.floor((y / 50) * 255),
+      b: Math.floor(((x + y) / 100) * 255),
+      a: 255,
+    }));
+
+    const blob = encodeBMP8Bit(imageData);
+
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.size).toBeGreaterThan(0);
+    const header = await readBMPHeader(blob);
+    expect(header.bitsPerPixel).toBe(8);
   });
 });

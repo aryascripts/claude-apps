@@ -188,7 +188,7 @@ function setupEventListeners() {
 
   // Compression level change handler
   if (compressionLevel) {
-    compressionLevel.addEventListener("change", () => {
+    compressionLevel.addEventListener("change", (e) => {
       handleCompressionLevelChange();
       // updatePreview is called inside handleCompressionLevelChange
     });
@@ -412,7 +412,9 @@ function clearImage() {
 }
 
 function updatePreview() {
-  if (!currentImage) return;
+  if (!currentImage) {
+    return;
+  }
 
   try {
     previewStatus.textContent = "Generating preview...";
@@ -466,12 +468,44 @@ function updatePreview() {
       previewImageData = generatePreview8Bit(imageData);
     }
 
-    // Set preview canvas dimensions
-    previewCanvas.width = previewImageData.width;
-    previewCanvas.height = previewImageData.height;
+    // Ensure we have a fresh ImageData object (not a reference)
+    // Create a new ImageData to avoid any potential caching issues
+    const freshImageData = new ImageData(
+      new Uint8ClampedArray(previewImageData.data),
+      previewImageData.width,
+      previewImageData.height
+    );
+    previewImageData = freshImageData;
+
+    // Set preview canvas dimensions (this clears the canvas)
+    // Force a change to ensure browser updates
+    if (previewCanvas.width !== previewImageData.width) {
+      previewCanvas.width = previewImageData.width;
+    } else {
+      // Force clear by temporarily changing width
+      previewCanvas.width = 0;
+      previewCanvas.width = previewImageData.width;
+    }
+
+    if (previewCanvas.height !== previewImageData.height) {
+      previewCanvas.height = previewImageData.height;
+    } else {
+      previewCanvas.height = 0;
+      previewCanvas.height = previewImageData.height;
+    }
+
+    // Clear canvas before drawing
+    previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
 
     // Draw preview
     previewCtx.putImageData(previewImageData, 0, 0);
+
+    // Force browser to update the canvas display by toggling visibility
+    const wasVisible = previewCanvas.style.visibility !== "hidden";
+    previewCanvas.style.visibility = "hidden";
+    // Force reflow
+    void previewCanvas.offsetHeight;
+    previewCanvas.style.visibility = wasVisible ? "visible" : "";
 
     // Update status
     const levelNames = {

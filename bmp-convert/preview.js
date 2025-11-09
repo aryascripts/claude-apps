@@ -3,35 +3,74 @@ import {
   build8BitPalette,
   build4BitPalette,
   quantizeImageData,
-  applyDithering4Bit,
+  applyFloydSteinbergDithering,
 } from "./encoder.js";
 
 // Preview generation functions - return quantized ImageData for display
 export function generatePreview24Bit(imageData) {
-  // 24-bit is lossless, so return original
-  return imageData;
+  // 24-bit is lossless, but return a copy to avoid reference issues
+  return new ImageData(
+    new Uint8ClampedArray(imageData.data),
+    imageData.width,
+    imageData.height
+  );
 }
 
-export function generatePreview8Bit(imageData) {
-  const { colorArray, findClosestColor } = build8BitPalette(imageData.data);
-  return quantizeImageData(imageData, colorArray, findClosestColor);
+export function generatePreview8Bit(imageData, dither = false) {
+  // Create a copy of the image data to avoid modifying the original
+  const imageDataCopy = new ImageData(
+    new Uint8ClampedArray(imageData.data),
+    imageData.width,
+    imageData.height
+  );
+
+  const { colorArray, findClosestColor } = build8BitPalette(imageDataCopy.data);
+
+  let processedData = imageDataCopy.data;
+  if (dither) {
+    processedData = applyFloydSteinbergDithering(
+      processedData,
+      imageDataCopy.width,
+      imageDataCopy.height,
+      colorArray,
+      findClosestColor
+    );
+    const ditheredImageData = new ImageData(
+      imageDataCopy.width,
+      imageDataCopy.height
+    );
+    ditheredImageData.data.set(processedData);
+    return quantizeImageData(ditheredImageData, colorArray, findClosestColor);
+  }
+
+  return quantizeImageData(imageDataCopy, colorArray, findClosestColor);
 }
 
 export function generatePreview4Bit(imageData, aggressive = false) {
-  const width = imageData.width;
-  const height = imageData.height;
-  let processedData = imageData.data;
+  // Create a copy of the image data to avoid modifying the original
+  const imageDataCopy = new ImageData(
+    new Uint8ClampedArray(imageData.data),
+    imageData.width,
+    imageData.height
+  );
+
+  const width = imageDataCopy.width;
+  const height = imageDataCopy.height;
+  let processedData = imageDataCopy.data;
+
+  // Build palette first
+  const { colorArray, findClosestColor } = build4BitPalette(processedData);
 
   // Apply dithering if aggressive
   if (aggressive) {
-    processedData = applyDithering4Bit(processedData, width, height);
-    // Create new ImageData with dithered data for palette building
-    const tempImageData = new ImageData(width, height);
-    tempImageData.data.set(processedData);
-    processedData = tempImageData.data;
+    processedData = applyFloydSteinbergDithering(
+      processedData,
+      width,
+      height,
+      colorArray,
+      findClosestColor
+    );
   }
-
-  const { colorArray, findClosestColor } = build4BitPalette(processedData);
 
   // Use processed data for quantization
   const processedImageData = new ImageData(width, height);

@@ -2,8 +2,423 @@
 
 // Shared helper functions for color quantization and palette building
 
-// Apply Floyd-Steinberg dithering for 4-bit aggressive mode
+// CIE76 perceptual color distance (more accurate than Euclidean RGB)
+// Accounts for human eye sensitivity - green differences are more noticeable
+function cie76Distance(r1, g1, b1, r2, g2, b2) {
+  // Convert RGB to linear RGB (gamma correction)
+  const toLinear = (c) => {
+    c = c / 255;
+    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  };
+
+  // Convert to XYZ color space
+  const toXYZ = (r, g, b) => {
+    r = toLinear(r);
+    g = toLinear(g);
+    b = toLinear(b);
+    return {
+      x: r * 0.4124564 + g * 0.3575761 + b * 0.1804375,
+      y: r * 0.2126729 + g * 0.7151522 + b * 0.072175,
+      z: r * 0.0193339 + g * 0.119192 + b * 0.9503041,
+    };
+  };
+
+  // Convert XYZ to LAB
+  const toLAB = (xyz) => {
+    const f = (t) => {
+      const delta = 6 / 29;
+      if (t > delta ** 3) {
+        return Math.pow(t, 1 / 3);
+      }
+      return t / (3 * delta ** 2) + 4 / 29;
+    };
+
+    const xn = 0.95047;
+    const yn = 1.0;
+    const zn = 1.08883;
+
+    const fx = f(xyz.x / xn);
+    const fy = f(xyz.y / yn);
+    const fz = f(xyz.z / zn);
+
+    return {
+      l: 116 * fy - 16,
+      a: 500 * (fx - fy),
+      b: 200 * (fy - fz),
+    };
+  };
+
+  const lab1 = toLAB(toXYZ(r1, g1, b1));
+  const lab2 = toLAB(toXYZ(r2, g2, b2));
+
+  // CIE76 distance formula
+  const dl = lab1.l - lab2.l;
+  const da = lab1.a - lab2.a;
+  const db = lab1.b - lab2.b;
+
+  return Math.sqrt(dl * dl + da * da + db * db);
+}
+
+// Simplified perceptual distance (faster approximation)
+// Uses weighted RGB distance that approximates perceptual difference
+function perceptualDistance(r1, g1, b1, r2, g2, b2) {
+  // Weights based on human eye sensitivity (green is more noticeable)
+  const dr = r1 - r2;
+  const dg = g1 - g2;
+  const db = b1 - b2;
+  // Approximate perceptual weights: R=0.3, G=0.59, B=0.11 (luminance weights)
+  return Math.sqrt(0.3 * dr * dr + 0.59 * dg * dg + 0.11 * db * db);
+}
+
+// Median Cut algorithm for adaptive palette generation
+// Recursively splits color space based on the longest dimension
+function medianCutQuantize(data, maxColors) {
+  // Collect all unique colors from the image
+  const colorMap = new Map();
+  const colors = [];
+
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] < 128) continue; // Skip transparent pixels
+
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    const key = (r << 16) | (g << 8) | b;
+
+    if (!colorMap.has(key)) {
+      colorMap.set(key, { r, g, b, count: 0 });
+      colors.push(colorMap.get(key));
+    }
+    colorMap.get(key).count++;
+  }
+
+  if (colors.length === 0) {
+    // No colors found, return default palette
+    const defaultPalette = [];
+    for (let i = 0; i < maxColors; i++) {
+      defaultPalette.push({ r: 0, g: 0, b: 0 });
+    }
+    return defaultPalette;
+  }
+
+  // If we have fewer colors than needed, use Median Cut to create a proper palette
+  // This ensures 4-bit and 8-bit produce different results even for simple images
+  // by creating intermediate colors through averaging
+
+  // Recursively split color space
+  // We need maxColors-1 boxes (one slot reserved for black/transparent)
+  const boxes = [
+    { colors, rMin: 0, rMax: 255, gMin: 0, gMax: 255, bMin: 0, bMax: 255 },
+  ];
+
+  while (boxes.length < maxColors - 1) {
+    // Find the box with the largest volume that can be split
+    let largestBoxIndex = -1;
+    let largestVolume = 0;
+
+    for (let i = 0; i < boxes.length; i++) {
+      const box = boxes[i];
+      if (box.colors.length <= 1) continue;
+
+      const rRange = box.rMax - box.rMin;
+      const gRange = box.gMax - box.gMin;
+      const bRange = box.bMax - box.bMin;
+      const volume = rRange * gRange * bRange;
+
+      if (volume > largestVolume) {
+        largestVolume = volume;
+        largestBoxIndex = i;
+      }
+    }
+
+    // If no box can be split, we need to create more colors by subdividing existing boxes
+    // This happens when we have fewer unique colors than needed palette size
+    if (largestBoxIndex === -1) {
+      // Try to force-split boxes even if they have only 1 color by using bounds
+      // This creates intermediate colors through interpolation
+      let foundSplittable = false;
+      for (let i = 0; i < boxes.length; i++) {
+        const box = boxes[i];
+        const rRange = box.rMax - box.rMin;
+        const gRange = box.gMax - box.gMin;
+        const bRange = box.bMax - box.bMin;
+
+        // If box has any range, we can split it even with 1 color
+        if (rRange > 1 || gRange > 1 || bRange > 1) {
+          largestBoxIndex = i;
+          foundSplittable = true;
+          break;
+        }
+      }
+
+      if (!foundSplittable) {
+        // All boxes are single pixels with no range - can't split further
+        // Fill remaining slots by duplicating (they'll be averaged to same color, but that's OK)
+        const existingBoxes = boxes.length;
+        while (boxes.length < maxColors - 1) {
+          const sourceBox = boxes[boxes.length % existingBoxes];
+          boxes.push({
+            colors: [...sourceBox.colors],
+            rMin: sourceBox.rMin,
+            rMax: sourceBox.rMax,
+            gMin: sourceBox.gMin,
+            gMax: sourceBox.gMax,
+            bMin: sourceBox.bMin,
+            bMax: sourceBox.bMax,
+          });
+        }
+        break;
+      }
+    }
+
+    const box = boxes[largestBoxIndex];
+
+    // Find the longest dimension
+    const rRange = box.rMax - box.rMin;
+    const gRange = box.gMax - box.gMin;
+    const bRange = box.bMax - box.bMin;
+
+    let sortBy;
+    if (rRange >= gRange && rRange >= bRange) {
+      sortBy = "r";
+    } else if (gRange >= bRange) {
+      sortBy = "g";
+    } else {
+      sortBy = "b";
+    }
+
+    let leftColors, rightColors;
+
+    if (box.colors.length <= 1) {
+      // Box has 1 color but has a range - split by midpoint of the range
+      // This creates intermediate colors
+      // Note: box.colors should never be empty here due to earlier filtering
+      const midpoint = Math.floor(
+        (box[sortBy + "Min"] + box[sortBy + "Max"]) / 2
+      );
+      const color = box.colors[0];
+
+      if (sortBy === "r") {
+        leftColors = color.r <= midpoint ? [color] : [];
+        rightColors = color.r > midpoint ? [color] : [];
+      } else if (sortBy === "g") {
+        leftColors = color.g <= midpoint ? [color] : [];
+        rightColors = color.g > midpoint ? [color] : [];
+      } else {
+        leftColors = color.b <= midpoint ? [color] : [];
+        rightColors = color.b > midpoint ? [color] : [];
+      }
+
+      // If both sides are empty or both have the color, create artificial split
+      if (leftColors.length === 0 && rightColors.length === 0) {
+        leftColors = [color];
+        rightColors = [color];
+      } else if (leftColors.length > 0 && rightColors.length === 0) {
+        rightColors = [color];
+      } else if (leftColors.length === 0 && rightColors.length > 0) {
+        leftColors = [color];
+      }
+    } else {
+      // Normal case: sort colors and split by median
+      box.colors.sort((a, b) => {
+        if (sortBy === "r") return a.r - b.r;
+        if (sortBy === "g") return a.g - b.g;
+        return a.b - b.b;
+      });
+
+      // Find median (weighted by count)
+      let totalCount = 0;
+      for (const color of box.colors) {
+        totalCount += color.count;
+      }
+
+      let medianCount = 0;
+      let medianIndex = 0;
+      for (let i = 0; i < box.colors.length; i++) {
+        medianCount += box.colors[i].count;
+        if (medianCount >= totalCount / 2) {
+          medianIndex = i;
+          break;
+        }
+      }
+
+      // Split the box
+      leftColors = box.colors.slice(0, medianIndex + 1);
+      rightColors = box.colors.slice(medianIndex + 1);
+    }
+
+    // Calculate new bounds
+    const leftBox = {
+      colors: leftColors,
+      rMin: box.rMin,
+      rMax: box.rMax,
+      gMin: box.gMin,
+      gMax: box.gMax,
+      bMin: box.bMin,
+      bMax: box.bMax,
+    };
+
+    const rightBox = {
+      colors: rightColors,
+      rMin: box.rMin,
+      rMax: box.rMax,
+      gMin: box.gMin,
+      gMax: box.gMax,
+      bMin: box.bMin,
+      bMax: box.bMax,
+    };
+
+    // Update bounds based on actual colors
+    // Only update if arrays are not empty - if empty, keep original bounds
+    if (sortBy === "r") {
+      if (leftColors.length > 0) {
+        leftBox.rMax = leftColors[leftColors.length - 1].r;
+      }
+      if (rightColors.length > 0) {
+        rightBox.rMin = rightColors[0].r;
+      }
+    } else if (sortBy === "g") {
+      if (leftColors.length > 0) {
+        leftBox.gMax = leftColors[leftColors.length - 1].g;
+      }
+      if (rightColors.length > 0) {
+        rightBox.gMin = rightColors[0].g;
+      }
+    } else {
+      if (leftColors.length > 0) {
+        leftBox.bMax = leftColors[leftColors.length - 1].b;
+      }
+      if (rightColors.length > 0) {
+        rightBox.bMin = rightColors[0].b;
+      }
+    }
+
+    // Replace the original box with the two new boxes
+    boxes.splice(largestBoxIndex, 1, leftBox, rightBox);
+  }
+
+  // Calculate average color for each box
+  const palette = [];
+  // Reserve index 0 for black (transparent pixels)
+  palette.push({ r: 0, g: 0, b: 0 });
+
+  for (const box of boxes) {
+    if (palette.length >= maxColors) break;
+
+    if (box.colors.length === 0) {
+      if (palette.length < maxColors) {
+        palette.push({ r: 0, g: 0, b: 0 });
+      }
+      continue;
+    }
+
+    let totalR = 0;
+    let totalG = 0;
+    let totalB = 0;
+    let totalCount = 0;
+
+    for (const color of box.colors) {
+      totalR += color.r * color.count;
+      totalG += color.g * color.count;
+      totalB += color.b * color.count;
+      totalCount += color.count;
+    }
+
+    const avgColor = {
+      r: Math.round(totalR / totalCount),
+      g: Math.round(totalG / totalCount),
+      b: Math.round(totalB / totalCount),
+    };
+
+    // Skip if it's black (already at index 0)
+    if (avgColor.r === 0 && avgColor.g === 0 && avgColor.b === 0) {
+      continue;
+    }
+
+    palette.push(avgColor);
+  }
+
+  // Fill remaining slots with black
+  while (palette.length < maxColors) {
+    palette.push({ r: 0, g: 0, b: 0 });
+  }
+
+  return palette.slice(0, maxColors);
+}
+
+// Apply Floyd-Steinberg dithering with palette quantization
+// This is a general dithering function that works with any palette
+function applyFloydSteinbergDithering(
+  data,
+  width,
+  height,
+  colorArray,
+  findClosestColor
+) {
+  const ditheredData = new Uint8ClampedArray(data);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      if (ditheredData[i + 3] < 128) continue;
+
+      const oldR = ditheredData[i];
+      const oldG = ditheredData[i + 1];
+      const oldB = ditheredData[i + 2];
+
+      // Find closest palette color
+      const colorIndex = findClosestColor(oldR, oldG, oldB);
+      const paletteColor = colorArray[colorIndex];
+      const newR = paletteColor.r;
+      const newG = paletteColor.g;
+      const newB = paletteColor.b;
+
+      // Update pixel with palette color
+      ditheredData[i] = newR;
+      ditheredData[i + 1] = newG;
+      ditheredData[i + 2] = newB;
+
+      // Calculate quantization error
+      const errR = oldR - newR;
+      const errG = oldG - newG;
+      const errB = oldB - newB;
+
+      // Distribute error to neighboring pixels (Floyd-Steinberg weights)
+      const distributeError = (x1, y1, weight) => {
+        if (x1 >= 0 && x1 < width && y1 >= 0 && y1 < height) {
+          const idx = (y1 * width + x1) * 4;
+          if (ditheredData[idx + 3] >= 128) {
+            ditheredData[idx] = Math.max(
+              0,
+              Math.min(255, ditheredData[idx] + errR * weight)
+            );
+            ditheredData[idx + 1] = Math.max(
+              0,
+              Math.min(255, ditheredData[idx + 1] + errG * weight)
+            );
+            ditheredData[idx + 2] = Math.max(
+              0,
+              Math.min(255, ditheredData[idx + 2] + errB * weight)
+            );
+          }
+        }
+      };
+
+      // Floyd-Steinberg error distribution pattern
+      distributeError(x + 1, y, 7 / 16); // Right
+      distributeError(x - 1, y + 1, 3 / 16); // Bottom-left
+      distributeError(x, y + 1, 5 / 16); // Bottom
+      distributeError(x + 1, y + 1, 1 / 16); // Bottom-right
+    }
+  }
+
+  return ditheredData;
+}
+
+// Apply Floyd-Steinberg dithering for 4-bit (backward compatibility)
 function applyDithering4Bit(data, width, height) {
+  // For backward compatibility, we'll use a simple quantization
+  // This will be replaced when build4BitPalette is called with dithering
   const ditheredData = new Uint8ClampedArray(data);
 
   for (let y = 0; y < height; y++) {
@@ -58,116 +473,26 @@ function applyDithering4Bit(data, width, height) {
   return ditheredData;
 }
 
-// Build 8-bit palette and color matching function
+// Build 8-bit palette and color matching function using Median Cut
 function build8BitPalette(data) {
-  const quantizeR = (r) => Math.floor((r * 6) / 256);
-  const quantizeG = (g) => Math.floor((g * 7) / 256);
-  const quantizeB = (b) => Math.floor((b * 6) / 256);
+  // Use Median Cut algorithm to generate adaptive 256-color palette
+  const colorArray = medianCutQuantize(data, 256);
 
-  const paletteMap = new Map();
-  const colorArray = [];
-
-  // Create a 6x7x6 color cube (252 colors)
-  for (let rq = 0; rq < 6; rq++) {
-    for (let gq = 0; gq < 7; gq++) {
-      for (let bq = 0; bq < 6; bq++) {
-        const r = Math.round((rq * 255) / 5);
-        const g = Math.round((gq * 255) / 6);
-        const b = Math.round((bq * 255) / 5);
-        const colorKey = (rq << 16) | (gq << 8) | bq;
-        paletteMap.set(colorKey, colorArray.length);
-        colorArray.push({ r, g, b });
-      }
-    }
-  }
-
-  // Fill remaining slots (up to 256) with colors from the image
-  if (colorArray.length < 256) {
-    const colorCount = new Map();
-
-    for (let i = 0; i < data.length; i += 4) {
-      if (data[i + 3] < 128) continue;
-
-      const rq = quantizeR(data[i]);
-      const gq = quantizeG(data[i + 1]);
-      const bq = quantizeB(data[i + 2]);
-      const colorKey = (rq << 16) | (gq << 8) | bq;
-
-      if (!paletteMap.has(colorKey)) {
-        colorCount.set(colorKey, (colorCount.get(colorKey) || 0) + 1);
-      }
-    }
-
-    const sortedColors = Array.from(colorCount.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 256 - colorArray.length);
-
-    for (const [colorKey] of sortedColors) {
-      const rq = (colorKey >> 16) & 0xff;
-      const gq = (colorKey >> 8) & 0xff;
-      const bq = colorKey & 0xff;
-      const r = Math.round((rq * 255) / 5);
-      const g = Math.round((gq * 255) / 6);
-      const b = Math.round((bq * 255) / 5);
-      paletteMap.set(colorKey, colorArray.length);
-      colorArray.push({ r, g, b });
-    }
-  }
-
-  // Fill remaining slots with black
-  while (colorArray.length < 256) {
-    colorArray.push({ r: 0, g: 0, b: 0 });
-  }
-
-  // Find closest color function
+  // Find closest color function using perceptual distance
   const findClosestColor = (r, g, b) => {
-    const rq = quantizeR(r);
-    const gq = quantizeG(g);
-    const bq = quantizeB(b);
-    const colorKey = (rq << 16) | (gq << 8) | bq;
-
-    if (paletteMap.has(colorKey)) {
-      return paletteMap.get(colorKey);
-    }
-
     let minDist = Infinity;
     let bestIndex = 0;
-    const searchRange = 1;
-    for (let dr = -searchRange; dr <= searchRange; dr++) {
-      for (let dg = -searchRange; dg <= searchRange; dg++) {
-        for (let db = -searchRange; db <= searchRange; db++) {
-          const nr = Math.max(0, Math.min(5, rq + dr));
-          const ng = Math.max(0, Math.min(6, gq + dg));
-          const nb = Math.max(0, Math.min(5, bq + db));
-          const nKey = (nr << 16) | (ng << 8) | nb;
 
-          if (paletteMap.has(nKey)) {
-            const idx = paletteMap.get(nKey);
-            const pr = colorArray[idx].r;
-            const pg = colorArray[idx].g;
-            const pb = colorArray[idx].b;
-            const dist = (r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2;
+    for (let i = 0; i < colorArray.length; i++) {
+      const pr = colorArray[i].r;
+      const pg = colorArray[i].g;
+      const pb = colorArray[i].b;
+      // Use perceptual distance for better color matching
+      const dist = perceptualDistance(r, g, b, pr, pg, pb);
 
-            if (dist < minDist) {
-              minDist = dist;
-              bestIndex = idx;
-            }
-          }
-        }
-      }
-    }
-
-    if (minDist === Infinity) {
-      for (let i = 0; i < colorArray.length; i++) {
-        const pr = colorArray[i].r;
-        const pg = colorArray[i].g;
-        const pb = colorArray[i].b;
-        const dist = (r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2;
-
-        if (dist < minDist) {
-          minDist = dist;
-          bestIndex = i;
-        }
+      if (dist < minDist) {
+        minDist = dist;
+        bestIndex = i;
       }
     }
 
@@ -177,65 +502,13 @@ function build8BitPalette(data) {
   return { colorArray, findClosestColor };
 }
 
-// Build 4-bit palette and color matching function
+// Build 4-bit palette and color matching function using Median Cut
 function build4BitPalette(data) {
-  const quantizeR = (r) => Math.floor((r * 4) / 256);
-  const quantizeG = (g) => Math.floor((g * 4) / 256);
-  const quantizeB = (b) => Math.floor((b * 4) / 256);
+  // Use Median Cut algorithm to generate adaptive 16-color palette
+  const colorArray = medianCutQuantize(data, 16);
 
-  const colorCount = new Map();
-
-  for (let i = 0; i < data.length; i += 4) {
-    if (data[i + 3] < 128) continue;
-
-    const rq = quantizeR(data[i]);
-    const gq = quantizeG(data[i + 1]);
-    const bq = quantizeB(data[i + 2]);
-    const colorKey = (rq << 8) | (gq << 4) | bq;
-
-    colorCount.set(colorKey, (colorCount.get(colorKey) || 0) + 1);
-  }
-
-  const sortedColors = Array.from(colorCount.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 16);
-
-  const colorArray = [];
-  const paletteMap = new Map();
-
-  sortedColors.forEach(([colorKey]) => {
-    const rq = (colorKey >> 8) & 0xf;
-    const gq = (colorKey >> 4) & 0xf;
-    const bq = colorKey & 0xf;
-    const r = Math.round((rq * 255) / 3);
-    const g = Math.round((gq * 255) / 3);
-    const b = Math.round((bq * 255) / 3);
-
-    paletteMap.set(colorKey, colorArray.length);
-    colorArray.push({ r, g, b });
-  });
-
-  while (colorArray.length < 16) {
-    const idx = colorArray.length;
-    const rq = idx % 4;
-    const gq = Math.floor(idx / 4) % 4;
-    const bq = Math.floor(idx / 16) % 4;
-    const r = Math.round((rq * 255) / 3);
-    const g = Math.round((gq * 255) / 3);
-    const b = Math.round((bq * 255) / 3);
-    colorArray.push({ r, g, b });
-  }
-
+  // Find closest color function using perceptual distance
   const findClosestColor = (r, g, b) => {
-    const rq = quantizeR(r);
-    const gq = quantizeG(g);
-    const bq = quantizeB(b);
-    const colorKey = (rq << 8) | (gq << 4) | bq;
-
-    if (paletteMap.has(colorKey)) {
-      return paletteMap.get(colorKey);
-    }
-
     let minDist = Infinity;
     let bestIndex = 0;
 
@@ -243,7 +516,8 @@ function build4BitPalette(data) {
       const pr = colorArray[i].r;
       const pg = colorArray[i].g;
       const pb = colorArray[i].b;
-      const dist = (r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2;
+      // Use perceptual distance for better color matching
+      const dist = perceptualDistance(r, g, b, pr, pg, pb);
 
       if (dist < minDist) {
         minDist = dist;
@@ -297,6 +571,7 @@ export {
   build4BitPalette,
   quantizeImageData,
   applyDithering4Bit,
+  applyFloydSteinbergDithering,
 };
 
 export function encodeBMP(imageData) {
@@ -355,13 +630,28 @@ export function encodeBMP(imageData) {
   return new Blob([buffer], { type: "image/bmp" });
 }
 
-export function encodeBMP8Bit(imageData) {
+export function encodeBMP8Bit(imageData, dither = false) {
   const width = imageData.width;
   const height = imageData.height;
-  const data = imageData.data;
+  let data = imageData.data;
 
   // Use shared palette building function
   const { colorArray, findClosestColor } = build8BitPalette(data);
+
+  // Apply dithering if requested
+  if (dither) {
+    data = applyFloydSteinbergDithering(
+      data,
+      width,
+      height,
+      colorArray,
+      findClosestColor
+    );
+    // Create new ImageData with dithered data
+    const ditheredImageData = new ImageData(width, height);
+    ditheredImageData.data.set(data);
+    data = ditheredImageData.data;
+  }
 
   // Create pixel index array
   const pixelIndices = new Uint8Array(width * height);
@@ -441,25 +731,38 @@ export function encodeBMP4Bit(imageData, aggressive = false) {
   const height = imageData.height;
   let processedData = imageData.data;
 
-  // Apply dithering if aggressive
+  // Build palette first
+  const { colorArray, findClosestColor } = build4BitPalette(processedData);
+
+  // Apply dithering if aggressive (using proper palette-based dithering)
   if (aggressive) {
-    processedData = applyDithering4Bit(processedData, width, height);
+    processedData = applyFloydSteinbergDithering(
+      processedData,
+      width,
+      height,
+      colorArray,
+      findClosestColor
+    );
     // Create new ImageData with dithered data
     const tempImageData = new ImageData(width, height);
     tempImageData.data.set(processedData);
-    return encodeBMP4BitFromData(tempImageData);
+    return encodeBMP4BitFromData(tempImageData, colorArray, findClosestColor);
   } else {
-    return encodeBMP4BitFromData(imageData);
+    return encodeBMP4BitFromData(imageData, colorArray, findClosestColor);
   }
 }
 
-function encodeBMP4BitFromData(imageData) {
+function encodeBMP4BitFromData(imageData, colorArray, findClosestColor) {
   const width = imageData.width;
   const height = imageData.height;
   const data = imageData.data;
 
-  // Use shared palette building function
-  const { colorArray, findClosestColor } = build4BitPalette(data);
+  // Use provided palette or build new one
+  if (!colorArray || !findClosestColor) {
+    const palette = build4BitPalette(data);
+    colorArray = palette.colorArray;
+    findClosestColor = palette.findClosestColor;
+  }
 
   // Create pixel index array
   const pixelIndices = new Uint8Array(width * height);

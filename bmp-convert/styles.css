@@ -185,12 +185,13 @@ body {
 .format-badge {
   display: inline-block;
   padding: 0.25rem 0.75rem;
-  background: linear-gradient(135deg, var(–primary), var(–secondary));
+  background: linear-gradient(135deg, #667eea, #764ba2);
   color: #fff;
   border-radius: 9999px;
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.05em;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 #previewSection {
