@@ -204,10 +204,11 @@
               <h4 class="settings-label">Compression Level</h4>
               <label class="compression-option">
                 <select id="compressionLevel">
-                  <option value="24" selected>24-bit (~1.1 MB)</option>
-                  <option value="8">8-bit (~376 KB)</option>
-                  <option value="4">4-bit (~188 KB)</option>
-                  <option value="4-aggressive">4-bit (~150 KB)</option>
+                  <option value="24" selected>24-bit</option>
+                  <option value="8">8-bit</option>
+                  <option value="8-dithered">8-bit (dithered)</option>
+                  <option value="4">4-bit</option>
+                  <option value="4-aggressive">4-bit (dithered)</option>
                 </select>
               </label>
             </div>
@@ -243,12 +244,6 @@
               </div>
               <div class="preview-wrapper">
                 <canvas id="previewCanvas" alt="Converted preview"></canvas>
-              </div>
-              <div class="image-info" id="previewInfo">
-                <div>
-                  <strong>Status:</strong>
-                  <span id="previewStatus">Waiting for settings...</span>
-                </div>
               </div>
             </div>
           </div>

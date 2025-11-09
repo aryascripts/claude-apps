@@ -22,7 +22,6 @@ const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 const previewCanvas = document.getElementById("previewCanvas");
 const previewCtx = previewCanvas.getContext("2d");
-const previewStatus = document.getElementById("previewStatus");
 const cropOriginal = document.getElementById("cropOriginal");
 const cropXteink = document.getElementById("cropXteink");
 const cropCustom = document.getElementById("cropCustom");
@@ -241,16 +240,44 @@ function handleCompressionLevelChange() {
 
   const selectedValue = compressionLevel.value;
   const helpTexts = {
-    24: "<strong>24-bit:</strong> Highest quality, no compression. Best for preserving exact colors.",
-    8: "<strong>8-bit:</strong> Standard quality with color palette. Good balance of quality and file size.",
-    4: "<strong>4-bit:</strong> Smaller file size with reduced colors. Suitable for simple images.",
-    "4-aggressive":
-      "<strong>4-bit Aggressive:</strong> Maximum compression. Smallest file size, may reduce quality.",
+    24: {
+      title: "24-bit",
+      description:
+        "Highest quality, no compression. Best for preserving exact colors.",
+      size: "~1.1 MB",
+    },
+    8: {
+      title: "8-bit (standard)",
+      description:
+        "Standard quality with color palette. Good balance of quality and file size.",
+      size: "~376 KB",
+    },
+    "8-dithered": {
+      title: "8-bit (dithered)",
+      description:
+        "8-bit with dithering for smoother gradients. Better visual quality than standard 8-bit.",
+      size: "~350 KB",
+    },
+    4: {
+      title: "4-bit",
+      description:
+        "Smaller file size with reduced colors. Suitable for simple images.",
+      size: "~188 KB",
+    },
+    "4-aggressive": {
+      title: "4-bit (aggressive)",
+      description:
+        "Maximum compression. Smallest file size, may reduce quality.",
+      size: "~150 KB",
+    },
   };
 
-  const helpText = helpTexts[selectedValue];
-  if (helpText) {
-    compressionHelpText.innerHTML = helpText;
+  const helpInfo = helpTexts[selectedValue];
+  if (helpInfo) {
+    compressionHelpText.innerHTML = `
+      <strong>${helpInfo.title}:</strong> ${helpInfo.description}<br>
+      <span style="opacity: 0.8; font-size: 0.9em;">Estimated size: ${helpInfo.size}</span>
+    `;
     compressionHelp.style.display = "block";
   } else {
     compressionHelp.style.display = "none";
@@ -406,7 +433,6 @@ function clearImage() {
   imageInfo.innerHTML = "";
   previewCanvas.width = 0;
   previewCanvas.height = 0;
-  previewStatus.textContent = "Waiting for settings...";
   // Reset to preview tab (default)
   switchTab("preview");
 }
@@ -417,8 +443,6 @@ function updatePreview() {
   }
 
   try {
-    previewStatus.textContent = "Generating preview...";
-
     // Determine target dimensions based on crop option
     let targetWidth = currentImage.width;
     let targetHeight = currentImage.height;
@@ -438,7 +462,6 @@ function updatePreview() {
       !Number.isInteger(targetWidth) ||
       !Number.isInteger(targetHeight)
     ) {
-      previewStatus.textContent = "Invalid dimensions";
       return;
     }
 
@@ -455,17 +478,25 @@ function updatePreview() {
     let previewImageData;
     const level = compressionLevel ? compressionLevel.value : "24";
 
-    if (level === "24") {
-      previewImageData = generatePreview24Bit(imageData);
-    } else if (level === "8") {
-      previewImageData = generatePreview8Bit(imageData);
-    } else if (level === "4" || level === "4-aggressive") {
-      previewImageData = generatePreview4Bit(
-        imageData,
-        level === "4-aggressive"
-      );
-    } else {
-      previewImageData = generatePreview8Bit(imageData);
+    switch (level) {
+      case "24":
+        previewImageData = generatePreview24Bit(imageData);
+        break;
+      case "8":
+        previewImageData = generatePreview8Bit(imageData);
+        break;
+      case "8-dithered":
+        previewImageData = generatePreview8Bit(imageData, true);
+        break;
+      case "4":
+        previewImageData = generatePreview4Bit(imageData, false);
+        break;
+      case "4-aggressive":
+        previewImageData = generatePreview4Bit(imageData, true);
+        break;
+      default:
+        previewImageData = generatePreview8Bit(imageData);
+        break;
     }
 
     // Ensure we have a fresh ImageData object (not a reference)
@@ -506,20 +537,8 @@ function updatePreview() {
     // Force reflow
     void previewCanvas.offsetHeight;
     previewCanvas.style.visibility = wasVisible ? "visible" : "";
-
-    // Update status
-    const levelNames = {
-      24: "24-bit (lossless)",
-      8: "8-bit (256 colors)",
-      4: "4-bit (16 colors)",
-      "4-aggressive": "4-bit aggressive (16 colors, dithered)",
-    };
-    previewStatus.textContent = `${
-      levelNames[level] || "Unknown"
-    } - ${targetWidth}×${targetHeight}px`;
   } catch (error) {
     console.error("Preview generation error:", error);
-    previewStatus.textContent = "Preview error: " + error.message;
   }
 }
 
@@ -600,14 +619,25 @@ function convertToBMP() {
     let bmpBlob;
     const level = compressionLevel ? compressionLevel.value : "8";
 
-    if (level === "24") {
-      bmpBlob = encodeBMP(imageData);
-    } else if (level === "8") {
-      bmpBlob = encodeBMP8Bit(imageData);
-    } else if (level === "4" || level === "4-aggressive") {
-      bmpBlob = encodeBMP4Bit(imageData, level === "4-aggressive");
-    } else {
-      bmpBlob = encodeBMP8Bit(imageData);
+    switch (level) {
+      case "24":
+        bmpBlob = encodeBMP(imageData);
+        break;
+      case "8":
+        bmpBlob = encodeBMP8Bit(imageData);
+        break;
+      case "8-dithered":
+        bmpBlob = encodeBMP8Bit(imageData, true);
+        break;
+      case "4":
+        bmpBlob = encodeBMP4Bit(imageData, false);
+        break;
+      case "4-aggressive":
+        bmpBlob = encodeBMP4Bit(imageData, true);
+        break;
+      default:
+        bmpBlob = encodeBMP8Bit(imageData);
+        break;
     }
 
     const sizeMB = downloadBMP(bmpBlob, currentFileName);
