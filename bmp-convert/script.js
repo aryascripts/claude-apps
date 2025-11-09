@@ -1,6 +1,11 @@
 // Main application logic and UI handlers
 import { escapeHtml, downloadBMP, showNotification } from "./helpers.js";
 import { encodeBMP, encodeBMP8Bit, encodeBMP4Bit } from "./encoder.js";
+import {
+  generatePreview24Bit,
+  generatePreview8Bit,
+  generatePreview4Bit,
+} from "./preview.js";
 
 // DOM Elements
 const dropZone = document.getElementById("dropZone");
@@ -15,6 +20,9 @@ const notificationText = document.getElementById("notificationText");
 const notificationIcon = document.getElementById("notificationIcon");
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
+const previewCanvas = document.getElementById("previewCanvas");
+const previewCtx = previewCanvas.getContext("2d");
+const previewStatus = document.getElementById("previewStatus");
 const cropOriginal = document.getElementById("cropOriginal");
 const cropXteink = document.getElementById("cropXteink");
 const cropCustom = document.getElementById("cropCustom");
@@ -24,6 +32,10 @@ const customHeight = document.getElementById("customHeight");
 const compressionLevel = document.getElementById("compressionLevel");
 const compressionHelp = document.getElementById("compressionHelp");
 const compressionHelpText = document.getElementById("compressionHelpText");
+const tabOriginal = document.getElementById("tabOriginal");
+const tabPreview = document.getElementById("tabPreview");
+const tabContentOriginal = document.getElementById("tabContentOriginal");
+const tabContentPreview = document.getElementById("tabContentPreview");
 
 // State
 let currentImage = null;
@@ -138,21 +150,80 @@ function setupEventListeners() {
   // Clear button
   clearBtn.addEventListener("click", clearImage);
 
+  // Tab switching
+  if (tabOriginal) {
+    tabOriginal.addEventListener("click", () => switchTab("original"));
+  }
+  if (tabPreview) {
+    tabPreview.addEventListener("click", () => switchTab("preview"));
+  }
+
   // Crop option radio buttons
   if (cropOriginal) {
-    cropOriginal.addEventListener("change", handleCropOptionChange);
+    cropOriginal.addEventListener("change", () => {
+      handleCropOptionChange();
+      updatePreview();
+    });
   }
   if (cropXteink) {
-    cropXteink.addEventListener("change", handleCropOptionChange);
+    cropXteink.addEventListener("change", () => {
+      handleCropOptionChange();
+      updatePreview();
+    });
   }
   if (cropCustom) {
-    cropCustom.addEventListener("change", handleCropOptionChange);
+    cropCustom.addEventListener("change", () => {
+      handleCropOptionChange();
+      updatePreview();
+    });
+  }
+
+  // Custom dimension inputs
+  if (customWidth) {
+    customWidth.addEventListener("input", debounce(updatePreview, 300));
+  }
+  if (customHeight) {
+    customHeight.addEventListener("input", debounce(updatePreview, 300));
   }
 
   // Compression level change handler
   if (compressionLevel) {
-    compressionLevel.addEventListener("change", handleCompressionLevelChange);
+    compressionLevel.addEventListener("change", () => {
+      handleCompressionLevelChange();
+      // updatePreview is called inside handleCompressionLevelChange
+    });
   }
+}
+
+function switchTab(tabName) {
+  if (tabName === "original") {
+    tabOriginal?.classList.add("active");
+    tabPreview?.classList.remove("active");
+    tabContentOriginal?.classList.add("active");
+    tabContentPreview?.classList.remove("active");
+  } else if (tabName === "preview") {
+    tabOriginal?.classList.remove("active");
+    tabPreview?.classList.add("active");
+    tabContentOriginal?.classList.remove("active");
+    tabContentPreview?.classList.add("active");
+    // Generate preview when switching to preview tab if not already generated
+    if (currentImage) {
+      updatePreview();
+    }
+  }
+}
+
+// Debounce helper for preview updates
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
 }
 
 function handleCropOptionChange() {
@@ -183,6 +254,11 @@ function handleCompressionLevelChange() {
     compressionHelp.style.display = "block";
   } else {
     compressionHelp.style.display = "none";
+  }
+
+  // Update preview when compression changes
+  if (currentImage) {
+    updatePreview();
   }
 }
 
@@ -265,7 +341,7 @@ function handleFile(file) {
 
       currentImage = img;
       preview.src = e.target.result;
-      previewSection.classList.add("visible");
+      previewSection.style.display = "flex";
 
       // Display image info with filename (safely escaped)
       const fileSizeKB = (file.size / 1024).toFixed(2);
@@ -282,6 +358,9 @@ function handleFile(file) {
 
       // Show compression help text for currently selected option
       handleCompressionLevelChange();
+
+      // Generate initial preview
+      updatePreview();
 
       showNotification(
         "Image loaded successfully!",
@@ -323,8 +402,91 @@ function clearImage() {
   currentFileName = null;
   preview.src = "";
   fileInput.value = "";
-  previewSection.classList.remove("visible");
+  previewSection.style.display = "none";
   imageInfo.innerHTML = "";
+  previewCanvas.width = 0;
+  previewCanvas.height = 0;
+  previewStatus.textContent = "Waiting for settings...";
+  // Reset to preview tab (default)
+  switchTab("preview");
+}
+
+function updatePreview() {
+  if (!currentImage) return;
+
+  try {
+    previewStatus.textContent = "Generating preview...";
+
+    // Determine target dimensions based on crop option
+    let targetWidth = currentImage.width;
+    let targetHeight = currentImage.height;
+
+    if (cropXteink && cropXteink.checked) {
+      targetWidth = 480;
+      targetHeight = 800;
+    } else if (cropCustom && cropCustom.checked) {
+      targetWidth = parseInt(customWidth.value) || currentImage.width;
+      targetHeight = parseInt(customHeight.value) || currentImage.height;
+    }
+
+    // Validate dimensions
+    if (
+      targetWidth <= 0 ||
+      targetHeight <= 0 ||
+      !Number.isInteger(targetWidth) ||
+      !Number.isInteger(targetHeight)
+    ) {
+      previewStatus.textContent = "Invalid dimensions";
+      return;
+    }
+
+    // Set canvas dimensions for processing
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(currentImage, 0, 0, targetWidth, targetHeight);
+
+    // Get image data
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    // Generate preview based on compression level
+    let previewImageData;
+    const level = compressionLevel ? compressionLevel.value : "24";
+
+    if (level === "24") {
+      previewImageData = generatePreview24Bit(imageData);
+    } else if (level === "8") {
+      previewImageData = generatePreview8Bit(imageData);
+    } else if (level === "4" || level === "4-aggressive") {
+      previewImageData = generatePreview4Bit(
+        imageData,
+        level === "4-aggressive"
+      );
+    } else {
+      previewImageData = generatePreview8Bit(imageData);
+    }
+
+    // Set preview canvas dimensions
+    previewCanvas.width = previewImageData.width;
+    previewCanvas.height = previewImageData.height;
+
+    // Draw preview
+    previewCtx.putImageData(previewImageData, 0, 0);
+
+    // Update status
+    const levelNames = {
+      24: "24-bit (lossless)",
+      8: "8-bit (256 colors)",
+      4: "4-bit (16 colors)",
+      "4-aggressive": "4-bit aggressive (16 colors, dithered)",
+    };
+    previewStatus.textContent = `${
+      levelNames[level] || "Unknown"
+    } - ${targetWidth}×${targetHeight}px`;
+  } catch (error) {
+    console.error("Preview generation error:", error);
+    previewStatus.textContent = "Preview error: " + error.message;
+  }
 }
 
 function convertToBMP() {
