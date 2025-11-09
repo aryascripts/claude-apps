@@ -22,19 +22,37 @@ const customCropInputs = document.getElementById("customCropInputs");
 const customWidth = document.getElementById("customWidth");
 const customHeight = document.getElementById("customHeight");
 const compressionLevel = document.getElementById("compressionLevel");
+const compressionHelp = document.getElementById("compressionHelp");
+const compressionHelpText = document.getElementById("compressionHelpText");
 
 // State
 let currentImage = null;
 let currentFileName = null;
 
 // Initialize - ensure DOM is ready (though modules are deferred)
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", init);
 } else {
   init();
 }
 
 function init() {
+  // Reset crop options to default (Xteink) on page load
+  // This prevents browsers from remembering the "custom" selection after refresh
+  if (cropXteink) {
+    cropXteink.checked = true;
+  }
+  if (cropCustom) {
+    cropCustom.checked = false;
+  }
+  if (cropOriginal) {
+    cropOriginal.checked = false;
+  }
+  // Ensure custom inputs are hidden on load
+  if (customCropInputs) {
+    customCropInputs.style.display = "none";
+  }
+
   setupEventListeners();
 }
 
@@ -130,6 +148,11 @@ function setupEventListeners() {
   if (cropCustom) {
     cropCustom.addEventListener("change", handleCropOptionChange);
   }
+
+  // Compression level change handler
+  if (compressionLevel) {
+    compressionLevel.addEventListener("change", handleCompressionLevelChange);
+  }
 }
 
 function handleCropOptionChange() {
@@ -137,6 +160,29 @@ function handleCropOptionChange() {
     customCropInputs.style.display = "flex";
   } else {
     customCropInputs.style.display = "none";
+  }
+}
+
+function handleCompressionLevelChange() {
+  if (!compressionLevel || !compressionHelp || !compressionHelpText) {
+    return;
+  }
+
+  const selectedValue = compressionLevel.value;
+  const helpTexts = {
+    24: "<strong>24-bit:</strong> Highest quality, no compression. Best for preserving exact colors.",
+    8: "<strong>8-bit:</strong> Standard quality with color palette. Good balance of quality and file size.",
+    4: "<strong>4-bit:</strong> Smaller file size with reduced colors. Suitable for simple images.",
+    "4-aggressive":
+      "<strong>4-bit Aggressive:</strong> Maximum compression. Smallest file size, may reduce quality.",
+  };
+
+  const helpText = helpTexts[selectedValue];
+  if (helpText) {
+    compressionHelpText.innerHTML = helpText;
+    compressionHelp.style.display = "block";
+  } else {
+    compressionHelp.style.display = "none";
   }
 }
 
@@ -233,6 +279,9 @@ function handleFile(file) {
               file.type.split("/")[1].toUpperCase()
             )}</div>
         `;
+
+      // Show compression help text for currently selected option
+      handleCompressionLevelChange();
 
       showNotification(
         "Image loaded successfully!",

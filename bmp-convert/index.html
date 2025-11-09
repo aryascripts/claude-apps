@@ -153,6 +153,7 @@
                   name="cropOption"
                   value="original"
                   id="cropOriginal"
+                  autocomplete="off"
                 />
                 <span>Original</span>
               </label>
@@ -163,6 +164,7 @@
                   value="xteink"
                   id="cropXteink"
                   checked
+                  autocomplete="off"
                 />
                 <span>Xteink (480×800)</span>
               </label>
@@ -172,6 +174,7 @@
                   name="cropOption"
                   value="custom"
                   id="cropCustom"
+                  autocomplete="off"
                 />
                 <span>Custom</span>
               </label>
@@ -212,6 +215,13 @@
                 <option value="4-aggressive">4-bit (~150 KB)</option>
               </select>
             </label>
+            <div
+              class="compression-help"
+              id="compressionHelp"
+              style="display: none"
+            >
+              <p id="compressionHelpText"></p>
+            </div>
             <button class="btn-convert" id="convertBtn">
               <svg
                 width="20"
