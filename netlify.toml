@@ -12,14 +12,25 @@
     Permissions-Policy = "geolocation=(), microphone=(), camera=()"
     Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'none';"
 
-# Redirect tool paths to their index.html files
+# Redirect root to /page-apps
 [[redirects]]
-  from = "/counter"
+  from = "/"
+  to = "/page-apps/"
+  status = 200
+
+# Serve /page-apps/* from root files (for GitHub Pages compatibility)
+[[redirects]]
+  from = "/page-apps"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/page-apps/counter"
   to = "/counter/index.html"
   status = 200
 
 [[redirects]]
-  from = "/bmp-convert"
+  from = "/page-apps/bmp-convert"
   to = "/bmp-convert/index.html"
   status = 200
 
