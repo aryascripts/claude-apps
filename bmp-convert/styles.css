@@ -353,9 +353,9 @@ body {
 
 .compression-option {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 1rem 0;
   margin-bottom: 1rem;
   background: var(–gray-50);
   border-radius: 0.5rem;
@@ -366,11 +366,10 @@ body {
   font-size: 0.875rem;
   color: var(–gray-700);
   font-weight: 500;
-  min-width: 120px;
 }
 
 .compression-option select {
-  flex: 1;
+  width: 100%;
   padding: 0.5rem 0.75rem;
   border: 1px solid var(–gray-300);
   border-radius: 0.5rem;

@@ -27,8 +27,12 @@ const compressionLevel = document.getElementById("compressionLevel");
 let currentImage = null;
 let currentFileName = null;
 
-// Initialize
-init();
+// Initialize - ensure DOM is ready (though modules are deferred)
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
 
 function init() {
   setupEventListeners();
@@ -45,10 +49,15 @@ function setupEventListeners() {
   dropZone.addEventListener(
     "click",
     (e) => {
+      e.preventDefault();
       e.stopPropagation();
-      // Trigger file input click
+      // Trigger file input click - must be in same event loop as user interaction
       if (fileInput) {
-        fileInput.click();
+        try {
+          fileInput.click();
+        } catch (error) {
+          console.error("Failed to trigger file input:", error);
+        }
       }
     },
     false
