@@ -13,7 +13,7 @@
     <!-- Note: frame-ancestors must be set via HTTP headers, not meta tag -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'none'; base-uri 'self'; form-action 'none';"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.buymeacoffee.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src https://cdnjs.buymeacoffee.com https://www.buymeacoffee.com; base-uri 'self'; form-action 'none';"
     />
     <!-- Clickjacking protection -->
     <meta http-equiv="X-Frame-Options" content="DENY" />
@@ -71,5 +71,20 @@
     </div>
 
     <script src="/page-apps/script.js"></script>
+    <div class="bmc-button-container">
+      <script
+        type="text/javascript"
+        src="https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js"
+        data-name="bmc-button"
+        data-slug="aryascripts"
+        data-color="#feffff"
+        data-emoji=""
+        data-font="Cookie"
+        data-text="Buy me a coffee"
+        data-outline-color="#000000"
+        data-font-color="#000000"
+        data-coffee-color="#FFDD00"
+      ></script>
+    </div>
   </body>
 </html>
